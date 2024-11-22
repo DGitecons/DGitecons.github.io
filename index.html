@@ -59,88 +59,86 @@
         .news-container {
             max-width: 100%;
             display: flex;
-            flex-direction: column;
-            gap: 20px;
+            flex-wrap: nowrap;
+            gap: 16px;
             padding: 24px;
             margin: 0 auto;
-            justify-content: flex-start;
-            overflow-y: auto;
-            max-height: 100vh;
+            justify-content: center;
+            overflow-x: auto;
         }
 
         .news-item {
-            display: flex;
-            align-items: center;
+            display: none;
             background-color: white;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             overflow: hidden;
-            height: 180px; /* Ajuste a altura do item de notícia */
-            padding: 16px;
-            gap: 16px; /* Espaço entre a imagem e o texto */
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            height: 400px;
+            width: 240px;
+            position: relative;
+            flex-shrink: 0;
         }
 
-        .news-item .news-image-container {
-            width: 220px;
-            height: 100%; /* Ajuste a altura do container da imagem */
-            overflow: hidden;
+        .news-item.active {
+            display: block;
         }
 
-        .news-item .news-image-container img {
+        .news-item:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .news-image-container {
+            width: 100%;
+            height: 140px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .news-item img {
             width: 100%;
             height: 100%;
-            object-fit: cover; /* A imagem vai preencher o espaço do container sem distorcer */
+            object-fit: cover;
+            transition: transform 0.3s ease;
         }
 
-        .news-item .news-content {
+        .news-item:hover img {
+            transform: scale(1.05);
+        }
+
+        .news-content {
+            padding: 16px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            flex-grow: 1;
+            gap: 8px;
+            height: calc(100% - 172px);
         }
 
         .news-item h3 {
-            font-size: 22px;
+            font-size: 16px;
             color: #333;
             margin: 0;
             font-weight: bold;
             line-height: 1.4;
             display: -webkit-box;
-            -webkit-line-clamp: 2;
+            -webkit-line-clamp: 3;
             -webkit-box-orient: vertical;
             overflow: hidden;
-            height: 52px;
+            height: 66px;
         }
 
         .news-item p {
-            font-size: 16px;
+            font-size: 13px;
             color: #666;
             margin: 0;
             line-height: 1.5;
             display: -webkit-box;
-            -webkit-line-clamp: 4;
+            -webkit-line-clamp: 5;  /* Alterado para 5 linhas */
             -webkit-box-orient: vertical;
             overflow: hidden;
             flex-grow: 1;
-            max-height: 90px;
-        }
-
-        /* Botão "Leia mais" */
-        .news-item .read-more-btn {
-            font-size: 14px;
-            color: white;
-            background-color: #4c66af;
-            padding: 8px 16px;
-            border-radius: 4px;
-            text-decoration: none;
-            display: inline-block;
-            transition: background-color 0.3s ease;
-            align-self: flex-start;
-        }
-
-        .news-item .read-more-btn:hover {
-            background-color: #4ab1c3;
+            max-height: 97px; /* 13px font * 1.5 line-height * 5 lines */
         }
 
         @keyframes fadeIn {
@@ -171,48 +169,6 @@
 
         .news-item.fade-out {
             animation: fadeOut 0.5s ease forwards;
-        }
-
-        /* Ajustes para telas pequenas (smartphones) */
-        @media (max-width: 768px) {
-            .news-item {
-                height: auto;
-                flex-direction: column;
-                padding: 10px;
-            }
-
-            .news-image-container {
-                width: 100%;
-                height: 180px;
-            }
-
-            .news-item img {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-            }
-
-            .news-content {
-                padding: 10px;
-            }
-
-            .news-item h3 {
-                font-size: 20px;
-            }
-
-            .news-item p {
-                font-size: 14px;
-            }
-
-            #news-widget {
-                flex-direction: column;
-                gap: 10px;
-                padding: 12px;
-            }
-
-            .page-info {
-                justify-content: center;
-            }
         }
     </style>
 </head>
@@ -253,10 +209,9 @@
                         const description = items[i].getElementsByTagName("description")[0].textContent;
                         const imageUrl = items[i].getElementsByTagName("enclosure")[0]?.getAttribute("url");
                         const imageType = items[i].getElementsByTagName("enclosure")[0]?.getAttribute("type");
-                        const url = items[i].getElementsByTagName("link")[0].textContent;
-
+                        
                         if (imageType !== "video/mp4" && imageType !== "audio/mp3" && imageUrl) {
-                            allNews.push({ title, description, imageUrl, url });
+                            allNews.push({ title, description, imageUrl });
                         }
                     }
 
@@ -293,45 +248,55 @@
                 dot.classList.toggle("active", index === currentPage - 1);
             });
 
-            const existingNews = Array.from(newsContainer.getElementsByClassName("news-item"));
-            existingNews.forEach(news => news.classList.add("fade-out"));
+            const existingNews = Array.from(newsContainer.children);
+            existingNews.forEach(news => news.classList.add('fade-out'));
 
             setTimeout(() => {
-                existingNews.forEach(news => news.remove());
+                newsContainer.innerHTML = '';
 
-                const newsBatch = allNews.slice(currentBatchIndex, currentBatchIndex + NEWS_PER_PAGE);
-                newsBatch.forEach(news => {
+                for (let i = 0; i < NEWS_PER_PAGE; i++) {
+                    const news = allNews[(currentBatchIndex + i) % allNews.length];
+
                     const newsItem = document.createElement("div");
-                    newsItem.classList.add("news-item", "fade-in");
-                    newsItem.innerHTML = `
+                    newsItem.classList.add("news-item", "active", "fade-in");
 
-                            <div class="news-image-container">
-                                <img src="${news.imageUrl}" alt="Imagem da notícia" loading="lazy">
-                            </div>
-                            <div class="news-content">
-                                <h3>${news.title}</h3>
-                                <p>${news.description}</p>
-                                                        <a href="${news.url}" target="_blank">
-                                <a class="read-more-btn" href="${news.url}" target="_blank">Leia mais...</a>
-                            </div>
-                        </a>
+                    newsItem.innerHTML = `
+                        <div class="news-image-container">
+                            <img src="${news.imageUrl}" alt="Imagem da notícia" loading="lazy">
+                        </div>
+                        <div class="news-content">
+                            <h3>${news.title}</h3>
+                            <p>${news.description}</p>
+                        </div>
                     `;
 
                     newsContainer.appendChild(newsItem);
-                });
+                }
 
-                progressBar.style.animation = "none";
-                setTimeout(() => {
-                    progressBar.style.animation = `width ${ROTATION_INTERVAL}s linear infinite`;
-                }, 100);
+                currentBatchIndex = (currentBatchIndex + NEWS_PER_PAGE) % allNews.length;
+                currentPage = Math.ceil(currentBatchIndex / NEWS_PER_PAGE) + 1;
+                startCountdown();
             }, 500);
-
-            currentBatchIndex += NEWS_PER_PAGE;
-            currentPage = Math.ceil(currentBatchIndex / NEWS_PER_PAGE);
-            updateNavigationDots();
         }
 
-        loadRSS();
+        function startCountdown() {
+            const progressBar = document.getElementById("progressBar");
+
+            clearInterval(countdownInterval);
+            progressBar.style.width = "100%";
+
+            countdownInterval = setInterval(() => {
+                const currentWidth = parseFloat(progressBar.style.width);
+                if (currentWidth > 0) {
+                    progressBar.style.width = `${currentWidth - 10}%`;
+                } else {
+                    clearInterval(countdownInterval);
+                    displayNewsBatch();
+                }
+            }, 1000);
+        }
+
+        window.onload = loadRSS;
     </script>
 </body>
 </html>
