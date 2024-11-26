@@ -3,87 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Notícias da Renascença</title>
+    <title>Notícias Móvel</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             background-color: #f4f4f4;
             margin: 0;
             padding: 0;
-            touch-action: manipulation;
-        }
-
-        #news-widget {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            z-index: 1000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 10px;
-            gap: 20px;
-            background-color: white;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        #news-widget .progress-container {
-            flex-grow: 1;
-            max-width: 300px;
-            height: 4px;
-            background: rgba(0, 0, 0, 0.1);
-            border-radius: 2px;
-            overflow: hidden;
-        }
-
-        #news-widget .progress-bar {
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, #4c66af, #4ab1c3);
-            transition: width 1s linear;
-            border-radius: 2px;
-        }
-
-        .page-info {
-            display: flex;
-            gap: 8px;
-        }
-
-        .page-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background-color: rgba(0, 0, 0, 0.2);
-            transition: background-color 0.3s ease;
-        }
-
-        .page-dot.active {
-            background-color: #4c66af;
+            touch-action: pan-y;
+            overscroll-behavior-y: contain;
         }
 
         .news-container {
             max-width: 100%;
             margin: 0 auto;
-            padding: 24px 12px;
+            padding: 12px;
             display: flex;
             flex-direction: column;
             gap: 16px;
-            margin-top: 60px;
         }
 
         .news-item {
-            display: none;
             background-color: white;
             border-radius: 12px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             overflow: hidden;
-            position: relative;
+            display: flex;
             flex-direction: column;
+            transition: transform 0.2s ease;
         }
 
-        .news-item.active {
-            display: flex;
+        .news-item:active {
+            transform: scale(0.98);
         }
 
         .news-image-container {
@@ -97,7 +48,6 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transition: transform 0.3s ease;
         }
 
         .news-content {
@@ -130,42 +80,7 @@
             overflow: hidden;
         }
 
-        @media (max-width: 480px) {
-            .news-container {
-                padding: 12px 8px;
-            }
-
-            .news-image-container {
-                height: 180px;
-            }
-
-            .news-item h3 {
-                font-size: 15px;
-            }
-
-            .news-item p {
-                font-size: 13px;
-            }
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        @keyframes fadeOut {
-            from { opacity: 1; transform: translateY(0); }
-            to { opacity: 0; transform: translateY(20px); }
-        }
-
-        .news-item.fade-in {
-            animation: fadeIn 0.5s ease forwards;
-        }
-
-        .news-item.fade-out {
-            animation: fadeOut 0.5s ease forwards;
-        }
-                .read-more-btn {
+        .read-more-btn {
             background-color: #4c66af;
             color: white;
             border: none;
@@ -181,161 +96,147 @@
         .read-more-btn:hover {
             background-color: #3a53a0;
         }
+
+        /* Swipe indicators */
+        .swipe-indicator {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+        }
+
+        .swipe-dot {
+            width: 8px;
+            height: 8px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 50%;
+        }
+
+        .swipe-dot.active {
+            background-color: #4c66af;
+        }
     </style>
 </head>
 <body>
-    <div id="news-widget">
-        <div class="page-info" id="pageInfo">
-            <!-- Dots serão adicionados aqui via JavaScript -->
-        </div>
-        <div class="progress-container">
-            <div class="progress-bar" id="progressBar"></div>
-        </div>
-    </div>
-    <div class="news-container" id="newsContainer">
-        <!-- Notícias serão carregadas aqui -->
-    </div>
+    <div class="news-container" id="newsContainer"></div>
+    <div class="swipe-indicator" id="swipeIndicator"></div>
 
     <script>
-        let allNews = [];
-let currentBatchIndex = 0;
-let currentPage = 1;
-const NEWS_PER_PAGE = 5;
-const ROTATION_INTERVAL = 10;
-let countdownInterval;
+        class NewsWidget {
+            constructor() {
+                this.allNews = [];
+                this.currentBatchIndex = 0;
+                this.NEWS_PER_PAGE = 5;
+                this.touchStartX = 0;
+                this.touchEndX = 0;
 
-function loadRSS() {
-    const rssUrl = 'https://rr.sapo.pt/rss/rssfeed.aspx?section=section_noticias';
-    
-    fetch(rssUrl)
-        .then(response => response.text())
-        .then(data => {
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(data, "application/xml");
+                this.initEventListeners();
+                this.loadRSS();
+            }
 
-            const items = xmlDoc.getElementsByTagName("item");
+            initEventListeners() {
+                document.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: true });
+                document.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: true });
+            }
 
-            for (let i = 0; i < items.length; i++) {
-                const title = items[i].getElementsByTagName("title")[0].textContent;
-                const description = items[i].getElementsByTagName("description")[0].textContent;
-                const imageUrl = items[i].getElementsByTagName("enclosure")[0]?.getAttribute("url");
-                const imageType = items[i].getElementsByTagName("enclosure")[0]?.getAttribute("type");
-                const link = items[i].getElementsByTagName("link")[0]?.textContent;
-                
-                if (imageType !== "video/mp4" && imageType !== "audio/mp3" && imageUrl) {
-                    allNews.push({ 
-                        title, 
-                        description, 
-                        imageUrl, 
-                        link 
-                    });
+            handleTouchStart(e) {
+                this.touchStartX = e.changedTouches[0].screenX;
+            }
+
+            handleTouchEnd(e) {
+                this.touchEndX = e.changedTouches[0].screenX;
+                this.handleSwipe();
+            }
+
+            handleSwipe() {
+                const minSwipeDistance = 50;
+                if (this.touchEndX < this.touchStartX - minSwipeDistance) {
+                    this.displayNextBatch();
                 }
             }
 
-            updateNavigationDots();
-            displayNewsBatch();
-        })
-        .catch(error => {
-            console.error('Erro ao carregar o RSS:', error);
-        });
-}
+            loadRSS() {
+                const rssUrl = 'https://rr.sapo.pt/rss/rssfeed.aspx?section=section_noticias';
+                
+                fetch(rssUrl)
+                    .then(response => response.text())
+                    .then(data => {
+                        const parser = new DOMParser();
+                        const xmlDoc = parser.parseFromString(data, "application/xml");
+                        const items = xmlDoc.getElementsByTagName("item");
 
-function updateNavigationDots() {
-    const pageInfo = document.getElementById("pageInfo");
-    const totalPages = Math.ceil(allNews.length / NEWS_PER_PAGE);
-    
-    pageInfo.innerHTML = '';
-    
-    for (let i = 0; i < totalPages; i++) {
-        const dot = document.createElement("div");
-        dot.classList.add("page-dot");
-        if (i === currentPage - 1) {
-            dot.classList.add("active");
+                        for (let i = 0; i < items.length; i++) {
+                            const title = items[i].getElementsByTagName("title")[0].textContent;
+                            const description = items[i].getElementsByTagName("description")[0].textContent;
+                            const imageUrl = items[i].getElementsByTagName("enclosure")[0]?.getAttribute("url");
+                            const imageType = items[i].getElementsByTagName("enclosure")[0]?.getAttribute("type");
+                            const link = items[i].getElementsByTagName("link")[0]?.textContent;
+                            
+                            if (imageType !== "video/mp4" && imageType !== "audio/mp3" && imageUrl) {
+                                this.allNews.push({ title, description, imageUrl, link });
+                            }
+                        }
+
+                        this.updateSwipeIndicator();
+                        this.displayNewsBatch();
+                    })
+                    .catch(error => {
+                        console.error('Erro ao carregar o RSS:', error);
+                    });
+            }
+
+            displayNextBatch() {
+                this.currentBatchIndex = (this.currentBatchIndex + this.NEWS_PER_PAGE) % this.allNews.length;
+                this.displayNewsBatch();
+            }
+
+            displayNewsBatch() {
+                const newsContainer = document.getElementById("newsContainer");
+                newsContainer.innerHTML = '';
+
+                for (let i = 0; i < this.NEWS_PER_PAGE; i++) {
+                    const news = this.allNews[(this.currentBatchIndex + i) % this.allNews.length];
+
+                    const newsItem = document.createElement("div");
+                    newsItem.classList.add("news-item");
+
+                    newsItem.innerHTML = `
+                        <div class="news-image-container">
+                            <img src="${news.imageUrl}" alt="Imagem da notícia" loading="lazy">
+                        </div>
+                        <div class="news-content">
+                            <h3>${news.title}</h3>
+                            <p>${news.description}</p>
+                            <a href="${news.link}" target="_blank" class="read-more-btn">Ler Mais</a>
+                        </div>
+                    `;
+
+                    newsContainer.appendChild(newsItem);
+                }
+
+                this.updateSwipeIndicator();
+            }
+
+            updateSwipeIndicator() {
+                const swipeIndicator = document.getElementById("swipeIndicator");
+                const totalPages = Math.ceil(this.allNews.length / this.NEWS_PER_PAGE);
+                const currentPage = Math.floor(this.currentBatchIndex / this.NEWS_PER_PAGE) + 1;
+
+                swipeIndicator.innerHTML = '';
+                for (let i = 0; i < totalPages; i++) {
+                    const dot = document.createElement("div");
+                    dot.classList.add("swipe-dot");
+                    if (i === currentPage - 1) {
+                        dot.classList.add("active");
+                    }
+                    swipeIndicator.appendChild(dot);
+                }
+            }
         }
-        pageInfo.appendChild(dot);
-    }
-}
 
-function displayNewsBatch() {
-    const newsContainer = document.getElementById("newsContainer");
-    const progressBar = document.getElementById("progressBar");
-
-    const dots = document.querySelectorAll(".page-dot");
-    dots.forEach((dot, index) => {
-        dot.classList.toggle("active", index === currentPage - 1);
-    });
-
-    const existingNews = Array.from(newsContainer.children);
-    existingNews.forEach(news => news.classList.add('fade-out'));
-
-    setTimeout(() => {
-        newsContainer.innerHTML = '';
-
-        for (let i = 0; i < NEWS_PER_PAGE; i++) {
-            const news = allNews[(currentBatchIndex + i) % allNews.length];
-
-            const newsItem = document.createElement("div");
-            newsItem.classList.add("news-item", "active", "fade-in");
-
-            newsItem.innerHTML = `
-                <div class="news-image-container">
-                    <img src="${news.imageUrl}" alt="Imagem da notícia" loading="lazy">
-                </div>
-                <div class="news-content">
-                    <h3>${news.title}</h3>
-                    <p>${news.description}</p>
-                    <a href="${news.link}" target="_blank" class="read-more-btn">Ler Mais</a>
-                </div>
-            `;
-
-            newsContainer.appendChild(newsItem);
-        }
-
-        currentBatchIndex = (currentBatchIndex + NEWS_PER_PAGE) % allNews.length;
-        currentPage = Math.ceil(currentBatchIndex / NEWS_PER_PAGE) + 1;
-        startCountdown();
-    }, 500);
-}
-
-function startCountdown() {
-    const progressBar = document.getElementById("progressBar");
-
-    clearInterval(countdownInterval);
-    progressBar.style.width = "100%";
-
-    countdownInterval = setInterval(() => {
-        const currentWidth = parseFloat(progressBar.style.width);
-        if (currentWidth > 0) {
-            progressBar.style.width = `${currentWidth - 10}%`;
-        } else {
-            clearInterval(countdownInterval);
-            displayNewsBatch();
-        }
-    }, 1000);
-}
-
-// Adicionando suporte a swipe para navegação entre notícias
-let touchStartX = 0;
-let touchEndX = 0;
-
-document.addEventListener('touchstart', e => {
-    touchStartX = e.changedTouches[0].screenX;
-});
-
-document.addEventListener('touchend', e => {
-    touchEndX = e.changedTouches[0].screenX;
-    handleSwipe();
-});
-
-function handleSwipe() {
-    const minSwipeDistance = 50;
-    if (touchEndX < touchStartX - minSwipeDistance) {
-        // Swipe para a esquerda - próximo lote de notícias
-        displayNewsBatch();
-    }
-}
-
-window.onload = loadRSS;
+        window.onload = () => new NewsWidget();
     </script>
 </body>
 </html>
